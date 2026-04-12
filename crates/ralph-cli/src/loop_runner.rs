@@ -115,6 +115,7 @@ pub async fn run_loop_impl(
     loop_context: Option<LoopContext>,
     custom_args: Vec<String>,
     auto_merge_override: Option<bool>,
+    auto_commit_override: Option<bool>,
     resume_loop_id: Option<String>,
 ) -> Result<TerminationReason> {
     // Set up process group leadership per spec
@@ -652,6 +653,9 @@ pub async fn run_loop_impl(
     // Auto-merge setting: CLI override > config > default (false for safety)
     let auto_merge = auto_merge_override.unwrap_or(config.features.auto_merge);
 
+    // Auto-commit setting: CLI override > config > default (true)
+    let auto_commit = auto_commit_override.unwrap_or(config.features.auto_commit);
+
     // Detect merge loop on startup via RALPH_MERGE_LOOP_ID env var
     // Per spec: If set, mark entry as "merging" with current PID
     let merge_loop_id: Option<String> = std::env::var("RALPH_MERGE_LOOP_ID").ok();
@@ -805,7 +809,7 @@ pub async fn run_loop_impl(
         // Per spec: merge loops do NOT enqueue themselves, even if run in worktree context
         if let Some(ctx) = context {
             if merge_loop_id.is_none() && matches!(reason, TerminationReason::CompletionPromise) {
-                let handler = LoopCompletionHandler::new(auto_merge);
+                let handler = LoopCompletionHandler::new(auto_merge, auto_commit);
                 match handler.handle_completion(ctx, prompt) {
                     Ok(CompletionAction::None) => {
                         debug!("Loop completed, no action needed");
@@ -4937,6 +4941,7 @@ pub async fn start_loop(
         Some(loop_context), // loop context
         Vec::new(),         // no custom args
         None,               // default auto-merge
+        None,               // default auto-commit
         None,               // no explicit loop ID
     )
     .await

@@ -731,6 +731,11 @@ struct RunArgs {
     #[arg(long)]
     no_auto_merge: bool,
 
+    /// Skip automatic commit of uncommitted changes during landing.
+    /// Overrides features.auto_commit from config.
+    #[arg(long)]
+    no_auto_commit: bool,
+
     // ─────────────────────────────────────────────────────────────────────────
     // Preflight Options
     // ─────────────────────────────────────────────────────────────────────────
@@ -1210,6 +1215,7 @@ async fn main() -> Result<()> {
                 idle_timeout: None,
                 exclusive: false,
                 no_auto_merge: false,
+                no_auto_commit: false,
                 skip_preflight: false,
                 verbose: false,
                 quiet: false,
@@ -1742,6 +1748,12 @@ async fn run_command(
     } else {
         None
     };
+    // --no-auto-commit CLI flag overrides config.features.auto_commit
+    let auto_commit_override = if args.no_auto_commit {
+        Some(false)
+    } else {
+        None
+    };
     let workspace_root = config.core.workspace_root.clone();
 
     // Determine TUI mode:
@@ -1767,6 +1779,7 @@ async fn run_command(
             Some(loop_context),
             custom_args,
             auto_merge_override,
+            auto_commit_override,
             args.loop_id,
         )
         .await?
@@ -1836,6 +1849,7 @@ struct SubprocessTuiArgs {
     record_session: Option<PathBuf>,
     exclusive: bool,
     no_auto_merge: bool,
+    no_auto_commit: bool,
     skip_preflight: bool,
     /// Config sources to forward to child process (-c args)
     config_sources: Vec<String>,
@@ -1864,6 +1878,7 @@ impl SubprocessTuiArgs {
             record_session: args.record_session.clone(),
             exclusive: args.exclusive,
             no_auto_merge: args.no_auto_merge,
+            no_auto_commit: args.no_auto_commit,
             skip_preflight: args.skip_preflight,
             config_sources: config_sources.iter().map(|s| s.to_cli_string()).collect(),
             hats_source: hats_source.map(|h| h.label()),
@@ -1967,6 +1982,9 @@ async fn run_subprocess_tui(
     }
     if args.no_auto_merge {
         child_args.push("--no-auto-merge".to_string());
+    }
+    if args.no_auto_commit {
+        child_args.push("--no-auto-commit".to_string());
     }
 
     // Forward preflight options
@@ -2170,6 +2188,7 @@ async fn resume_command(
         None,       // Deprecated resume command doesn't have loop_context
         Vec::new(), // Resume command doesn't support custom args
         None,       // Use config.features.auto_merge (deprecated command)
+        None,       // Use config.features.auto_commit (deprecated command)
         None,       // Deprecated resume command doesn't support --loop-id
     )
     .await?;
@@ -3708,6 +3727,7 @@ core:
             idle_timeout: None,
             exclusive: false,
             no_auto_merge: false,
+            no_auto_commit: false,
             skip_preflight: true,
             verbose: false,
             quiet: false,

@@ -19,7 +19,7 @@
 //!
 //! // Primary loop - no special action
 //! let primary = LoopContext::primary(PathBuf::from("/project"));
-//! let handler = LoopCompletionHandler::new(true); // auto_merge enabled
+//! let handler = LoopCompletionHandler::new(true, true); // auto_merge enabled
 //! let action = handler.handle_completion(&primary, "implement auth").unwrap();
 //! assert!(matches!(action, CompletionAction::None));
 //!
@@ -34,7 +34,7 @@
 //! ```
 
 use crate::git_ops::auto_commit_changes;
-use crate::landing::{LandingHandler, LandingResult};
+use crate::landing::{LandingConfig, LandingHandler, LandingResult};
 use crate::loop_context::LoopContext;
 use crate::merge_queue::{MergeQueue, MergeQueueError};
 use tracing::{debug, info, warn};
@@ -109,11 +109,13 @@ pub enum CompletionError {
 pub struct LoopCompletionHandler {
     /// Whether auto-merge is enabled (default: true).
     auto_merge: bool,
+    /// Whether auto-commit is enabled (default: true).
+    auto_commit: bool,
 }
 
 impl Default for LoopCompletionHandler {
     fn default() -> Self {
-        Self::new(true)
+        Self::new(true, true)
     }
 }
 
@@ -124,8 +126,13 @@ impl LoopCompletionHandler {
     ///
     /// * `auto_merge` - If true, completed worktree loops are enqueued for merge-ralph.
     ///   If false, worktrees are left for manual merge.
-    pub fn new(auto_merge: bool) -> Self {
-        Self { auto_merge }
+    /// * `auto_commit` - If true, uncommitted changes are auto-committed during landing.
+    ///   If false, uncommitted changes are left in the working tree.
+    pub fn new(auto_merge: bool, auto_commit: bool) -> Self {
+        Self {
+            auto_merge,
+            auto_commit,
+        }
     }
 
     /// Handles loop completion, taking appropriate action based on context.
@@ -177,24 +184,28 @@ impl LoopCompletionHandler {
 
         if self.auto_merge {
             // Auto-commit any uncommitted changes before enqueueing
-            match auto_commit_changes(context.workspace(), &loop_id) {
-                Ok(result) => {
-                    if result.committed {
-                        info!(
+            if self.auto_commit {
+                match auto_commit_changes(context.workspace(), &loop_id) {
+                    Ok(result) => {
+                        if result.committed {
+                            info!(
+                                loop_id = %loop_id,
+                                commit = ?result.commit_sha,
+                                files = result.files_staged,
+                                "Auto-committed changes before merge queue"
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
                             loop_id = %loop_id,
-                            commit = ?result.commit_sha,
-                            files = result.files_staged,
-                            "Auto-committed changes before merge queue"
+                            error = %e,
+                            "Auto-commit failed, proceeding with enqueue"
                         );
                     }
                 }
-                Err(e) => {
-                    warn!(
-                        loop_id = %loop_id,
-                        error = %e,
-                        "Auto-commit failed, proceeding with enqueue"
-                    );
-                }
+            } else {
+                debug!(loop_id = %loop_id, "Auto-commit disabled, skipping pre-merge commit");
             }
 
             // Enqueue to merge queue for automatic merge-ralph processing
@@ -229,7 +240,11 @@ impl LoopCompletionHandler {
     ///
     /// Returns the landing result if successful, or None if landing failed.
     fn execute_landing(&self, context: &LoopContext, prompt: &str) -> Option<LandingResult> {
-        let handler = LandingHandler::new(context.clone());
+        let config = LandingConfig {
+            auto_commit: self.auto_commit,
+            ..LandingConfig::default()
+        };
+        let handler = LandingHandler::with_config(context.clone(), config);
 
         match handler.land(prompt) {
             Ok(result) => {
@@ -303,7 +318,7 @@ mod tests {
         init_git_repo(temp.path());
         let context = LoopContext::primary(temp.path().to_path_buf());
         context.ensure_directories().unwrap();
-        let handler = LoopCompletionHandler::new(true);
+        let handler = LoopCompletionHandler::new(true, true);
 
         let action = handler.handle_completion(&context, "test prompt").unwrap();
         // Primary loops now return Landed instead of None
@@ -329,7 +344,7 @@ mod tests {
             LoopContext::worktree("ralph-test-1234", worktree_path.clone(), repo_root.clone());
         context.ensure_directories().unwrap();
 
-        let handler = LoopCompletionHandler::new(true); // auto_merge enabled
+        let handler = LoopCompletionHandler::new(true, true); // auto_merge enabled
 
         let action = handler
             .handle_completion(&context, "implement feature X")
@@ -363,7 +378,7 @@ mod tests {
             LoopContext::worktree("ralph-test-5678", worktree_path.clone(), repo_root.clone());
         context.ensure_directories().unwrap();
 
-        let handler = LoopCompletionHandler::new(false); // auto_merge disabled
+        let handler = LoopCompletionHandler::new(false, true); // auto_merge disabled
 
         let action = handler.handle_completion(&context, "test prompt").unwrap();
 
@@ -421,7 +436,7 @@ mod tests {
         let context =
             LoopContext::worktree("ralph-autocommit", worktree_path.clone(), repo_root.clone());
 
-        let handler = LoopCompletionHandler::new(true);
+        let handler = LoopCompletionHandler::new(true, true);
 
         let action = handler.handle_completion(&context, "add feature").unwrap();
 
@@ -486,7 +501,7 @@ mod tests {
         let context =
             LoopContext::worktree("ralph-clean", worktree_path.clone(), repo_root.clone());
 
-        let handler = LoopCompletionHandler::new(true);
+        let handler = LoopCompletionHandler::new(true, true);
 
         let action = handler.handle_completion(&context, "no changes").unwrap();
 

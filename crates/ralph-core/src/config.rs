@@ -1628,6 +1628,7 @@ pub struct PreflightConfig {
 /// features:
 ///   parallel: true  # Enable parallel loops via git worktrees
 ///   auto_merge: false  # Auto-merge worktree branches on completion
+///   auto_commit: false  # Skip auto-commit during landing
 ///   preflight:
 ///     enabled: false      # Opt-in: run preflight checks before `ralph run`
 ///     strict: false       # Treat warnings as failures
@@ -1653,6 +1654,14 @@ pub struct FeaturesConfig {
     #[serde(default)]
     pub auto_merge: bool,
 
+    /// Whether to auto-commit uncommitted changes during landing.
+    ///
+    /// When true (default), Ralph auto-commits any uncommitted changes
+    /// before the landing sequence completes. When false, uncommitted
+    /// changes are left in the working tree.
+    #[serde(default = "default_true")]
+    pub auto_commit: bool,
+
     /// Loop naming configuration for worktree branches.
     ///
     /// Controls how loop IDs are generated for parallel loops.
@@ -1669,8 +1678,9 @@ pub struct FeaturesConfig {
 impl Default for FeaturesConfig {
     fn default() -> Self {
         Self {
-            parallel: true,    // Parallel loops enabled by default
-            auto_merge: false, // Auto-merge disabled by default for safety
+            parallel: true,     // Parallel loops enabled by default
+            auto_merge: false,  // Auto-merge disabled by default for safety
+            auto_commit: true,  // Auto-commit enabled by default
             loop_naming: crate::loop_name::LoopNamingConfig::default(),
             preflight: PreflightConfig::default(),
         }
