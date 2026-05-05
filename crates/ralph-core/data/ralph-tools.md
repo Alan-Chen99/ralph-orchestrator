@@ -147,7 +147,9 @@ Template fields:
 - Confidence (0-100)
 - Alternatives Considered
 - Reasoning
-- Reversibility
+- When to re-evaluate
+- Independent evaluation (not-started/<status>; must be on different iteration)
+- Framing Biases (implicit assumptions, goals or requirement to meet embeded that bias future agents)
 - Timestamp (UTC ISO 8601)
 
 ## Output Formats

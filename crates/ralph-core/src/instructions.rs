@@ -180,7 +180,6 @@ If this iteration creates or discovers durable work, you MUST represent it with 
 If you are entering an unfamiliar area, you SHOULD search memories with `ralph tools memory search` before acting.
 You SHOULD assume the workflow commands are available when the loop is already running and use the task-specific command you actually need.
 The loop sets `$RALPH_BIN` to the current Ralph executable. Prefer `$RALPH_BIN emit ...` and `$RALPH_BIN tools ...` when you need a direct command form.
-Do not spend iterations on shell or tool-availability diagnosis unless the task is explicitly about the runtime environment.
 If a command's stdout is empty or terse, verify the intended side effect in the task/event state or in the files and artifacts the command should have changed.
 Keep temporary artifacts where later steps can still inspect them, such as a repo-local `logs/` directory or `/var/tmp` when needed.
 If a command fails, a dependency is missing, or you become blocked, you MUST record a `fix` memory with `ralph tools memory add`.
